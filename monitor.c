@@ -2,23 +2,59 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
-
+#include <stdint.h>
 
 struct cpuflags {
-	int user;
-	int nice;
-	int system;
-	int idle;
-	int iowait;
-	int irq;
-	int softirq;
-	int steal;
+	uint64_t user;
+	uint64_t nice;
+	uint64_t system;
+	uint64_t idle;
+	uint64_t iowait;
+	uint64_t irq;
+	uint64_t softirq;
+	uint64_t steal;
 };
 
 typedef struct cpuflags cpuF;
 
-void memoria();
+float memoria();
+float processador();
+float swap();
 
+int main() {
+
+	while(1) {
+		printf("Uso de CPU: %.2f%% \n", processador());
+		printf("Uso de Memoria: %.2f%% \n", memoria());
+		printf("Uso de Swap: %.2f%% \n", swap());
+		sleep(2);
+		printf("\n");	
+	}
+}
+
+float memoria() {
+	FILE *f = fopen("/proc/meminfo", "r");
+
+	if (f == NULL) {
+		return -1;
+	}
+
+	double total, free, available;
+	float uso = 0;
+
+	fscanf(f, "%*s %lf %*s", &total);
+	fscanf(f, "%*s %lf %*s", &free);
+	fscanf(f, "%*s %lf %*s", &available);
+
+	total = total / (1024.0 * 1024.0);
+	free = free / (1024.0 * 1024.0);
+	available = available / (1024.0 * 1024.0);
+
+	uso = ((total - available) / total) * 100;
+
+	fclose(f);
+	return uso;
+}
 
 float processador() {
 	FILE *f = fopen("/proc/stat", "r");
@@ -30,7 +66,7 @@ float processador() {
 	cpuF c1 = {0};
 	cpuF c2 = {0};
 
-	fscanf(f, "%*s %d %d %d %d %d %d %d %d %*d %*d", &c1.user, &c1.nice, &c1.system, &c1.idle,
+	fscanf(f, "%*s %llu %llu %llu %llu %llu %llu %llu %llu %*llu %*llu", &c1.user, &c1.nice, &c1.system, &c1.idle,
 			&c1.iowait, &c1.irq, &c1.softirq, &c1.steal);
 
 
@@ -39,7 +75,7 @@ float processador() {
 
 	FILE *g = fopen("/proc/stat", "r");
 		
-	fscanf(g, "%*s %d %d %d %d %d %d %d %d %*d %*d", &c2.user, &c2.nice, &c2.system, &c2.idle,
+	fscanf(g, "%*s %llu %llu %llu %llu %llu %llu %llu %llu %*llu %*llu", &c2.user, &c2.nice, &c2.system, &c2.idle,
 			&c2.iowait, &c2.irq, &c2.softirq, &c2.steal);
 
 	fclose(g);
@@ -66,45 +102,36 @@ float processador() {
 	return uso;
 }
 
-int main() {
-	int i = 0;
-	while (i < 15) {
-		FILE *f = fopen("dados.txt", "w");
-		fprintf(f, "CPU: %.2f%%", processador());
-		sleep(2);
-		i++;
-		fclose(f);
-
-	}
-	return 0;
-}
-
-
-
-void memoria() {
+float swap() {
 	FILE *f = fopen("/proc/meminfo", "r");
+	char *teste = malloc(sizeof(char) * 32);
+	
+	double swapTotal = 0;
+	double swapFree = 0;
+	float uso = 0;
 
-	if (f == NULL) {
-		return;
+	while (fscanf(f, "%s %lf %*s", teste, &swapTotal) != EOF) {
+		if (strcmp(teste, "SwapTotal:") == 0) {
+			break;
+		}
 	}
-
-	double total, free, available, usada;
-	float porcento;
-
-	fscanf(f, "%*s %lf %*s", &total);
-	fscanf(f, "%*s %lf %*s", &free);
-	fscanf(f, "%*s %lf %*s", &available);
-
-	total = total / (1024.0 * 1024.0);
-	free = free / (1024.0 * 1024.0);
-	available = available / (1024.0 * 1024.0);
-
-	usada = total - available;
-	porcento = (usada / total) * 100.0;
-
-	printf("Total: %.2lf Gib\n", total);
-	printf("Usada: %.2lf Gib (%.1f%%)\n", usada, porcento);	
+	rewind(f);
+	while (fscanf(f, "%s %lf %*s", teste, &swapFree) != EOF) {
+		if (strcmp(teste, "SwapFree:") == 0) {
+			break;
+		}
+	}
 
 	fclose(f);
-	return;
+	free(teste);
+
+	if (swapTotal == 0) {
+		return 0;
+	}
+
+	swapTotal = swapTotal / (1024.0 * 1024.0);
+	swapFree = swapFree / (1024.0 * 1024.0);
+	
+	uso = ((swapTotal - swapFree) / swapTotal) * 100; 
+	return uso;
 }
